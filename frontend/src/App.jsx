@@ -241,13 +241,12 @@ function AddForm({ onAdd }) {
       <div className="form-grid">
         <div className="field full">
           <label>paste product link</label>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="url-row">
             <input
               value={url}
               onChange={e => { setUrl(e.target.value); setForm(null); setFetchError('') }}
               onKeyDown={e => e.key === 'Enter' && url && (e.preventDefault(), fetchProduct())}
               placeholder="https://www.amazon.in/... or any supported store"
-              style={{ flex: 1 }}
             />
             <button
               type="button"

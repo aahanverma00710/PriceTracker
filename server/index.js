@@ -258,10 +258,37 @@ const SCRAPERS = {
 // Fill in your Gmail credentials in .env or directly here
 const EMAIL_USER = process.env.EMAIL_USER || "";
 const EMAIL_PASS = process.env.EMAIL_PASS || "";
-const EMAIL_TO   = process.env.EMAIL_TO   || "";
+
+async function sendWelcomeEmail(product) {
+  if (!EMAIL_USER || !EMAIL_PASS) return;
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: EMAIL_USER, pass: EMAIL_PASS }
+  });
+  await transporter.sendMail({
+    from: EMAIL_USER,
+    to: product.alertEmail,
+    subject: `✅ Now tracking ${product.name}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f9f9f9; border-radius: 12px;">
+        <h2 style="color: #111;">📦 We're on it!</h2>
+        <p>You've added <strong>${product.name}</strong> from <strong>${product.store}</strong> to your price tracker.</p>
+        <table style="width:100%; background:#fff; border-radius:8px; padding:16px; margin:16px 0;">
+          <tr><td style="color:#888;">Current Price</td><td><strong>₹${product.currentPrice}</strong></td></tr>
+          <tr><td style="color:#888;">Alert Threshold</td><td><strong>${product.threshold ? '₹' + product.threshold : 'Not set'}</strong></td></tr>
+          <tr><td style="color:#888;">Store</td><td><strong>${product.store}</strong></td></tr>
+        </table>
+        <p style="color:#555;">We'll check prices every 3 hours and notify you the moment the price drops below <strong>${product.threshold ? '₹' + product.threshold : 'your threshold'}</strong>.</p>
+        ${product.url ? `<a href="${product.url}" style="display:inline-block; margin-top:12px; padding:10px 20px; background:#111; color:#fff; border-radius:6px; text-decoration:none;">View Product →</a>` : ''}
+        <p style="margin-top:24px; font-size:12px; color:#aaa;">PriceTracker — watching prices so you don't have to.</p>
+      </div>
+    `
+  });
+  console.log(`[WELCOME EMAIL] Sent to ${product.alertEmail}`);
+}
 
 async function sendAlert(product, oldPrice, newPrice) {
-  const recipient = product.alertEmail || EMAIL_TO;
+  const recipient = product.alertEmail;
   if (!EMAIL_USER || !EMAIL_PASS || !recipient) {
     console.log(`[ALERT] ${product.name}: ₹${oldPrice} → ₹${newPrice} (email not configured)`);
     return;
@@ -379,6 +406,7 @@ app.post("/api/products", async (req, res) => {
 
   db.products.unshift(product);
   writeDB(db);
+  if (product.alertEmail) sendWelcomeEmail(product).catch(err => console.error("[WELCOME EMAIL ERROR]", err.message));
   res.json(product);
 });
 
@@ -437,8 +465,8 @@ app.get("/ping", (req, res) => {
 
 // --------------- Cron: local dev only, cron-job.org handles prod ---------------
 if (process.env.NODE_ENV !== "production") {
-  cron.schedule("0 */6 * * *", checkAllProducts);
-  console.log("[CRON] Local cron scheduled every 6 hours.");
+  cron.schedule("0 */3 * * *", checkAllProducts);
+  console.log("[CRON] Local cron scheduled every 3 hours.");
 }
 
 // --------------- Start ---------------

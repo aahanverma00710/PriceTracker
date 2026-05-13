@@ -161,7 +161,8 @@ function ProductCard({ product, onDelete, onRefresh }) {
 
 const STORE_DOMAINS = {
   'amazon.in': 'Amazon', 'amazon.com': 'Amazon',
-  'flipkart.com': 'Flipkart',
+  'amzn.in': 'Amazon', 'amzn.to': 'Amazon', 'a.co': 'Amazon',
+  'flipkart.com': 'Flipkart', 'fktr.in': 'Flipkart',
   'nykaa.com': 'Nykaa',
   'myntra.com': 'Myntra',
   'meesho.com': 'Meesho',

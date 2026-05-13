@@ -76,8 +76,23 @@ function regexPrice(html) {
   return null;
 }
 
+// Expand short URLs (amzn.in, amzn.to, a.co, fktr.in, etc.) by following redirects
+async function resolveUrl(url) {
+  try {
+    const res = await axios.get(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36" },
+      maxRedirects: 10,
+      timeout: 8000,
+    });
+    return res.request?.res?.responseUrl || url;
+  } catch {
+    return url;
+  }
+}
+
 const SCRAPERS = {
-  Amazon: async (url) => {
+  Amazon: async (rawUrl) => {
+    const url = await resolveUrl(rawUrl);
     const { data } = await axios.get(url, {
       headers: {
         "User-Agent":
@@ -100,7 +115,8 @@ const SCRAPERS = {
     return { price, name };
   },
 
-  Flipkart: async (url) => {
+  Flipkart: async (rawUrl) => {
+    const url = await resolveUrl(rawUrl);
     const { data } = await axios.get(url, {
       headers: {
         "User-Agent":

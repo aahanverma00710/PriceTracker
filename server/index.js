@@ -3,7 +3,8 @@ const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const cheerio = require("cheerio");
-const nodemailer = require("nodemailer");
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 const cron = require("node-cron");
 const fs = require("fs");
 const path = require("path");
@@ -255,34 +256,15 @@ const SCRAPERS = {
 };
 
 // --------------- Email notifier ---------------
-// Fill in your Gmail credentials in .env or directly here
-const EMAIL_USER = process.env.EMAIL_USER || "";
-const EMAIL_PASS = process.env.EMAIL_PASS || "";
-
 async function sendWelcomeEmail(product) {
   console.log(`[WELCOME EMAIL] Attempting to send to ${product.alertEmail}`);
-  if (!EMAIL_USER || !EMAIL_PASS) {
-    console.log('[WELCOME EMAIL] Skipping — EMAIL_USER or EMAIL_PASS not set');
+  if (!process.env.RESEND_API_KEY) {
+    console.log('[WELCOME EMAIL] Skipping — RESEND_API_KEY not set');
     return;
   }
   try {
-    console.log(`[WELCOME EMAIL] Connecting to smtp.gmail.com as ${EMAIL_USER}`);
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: EMAIL_USER,
-        pass: EMAIL_PASS
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-    await transporter.verify();
-    console.log('[WELCOME EMAIL] SMTP connection verified ✅');
-    await transporter.sendMail({
-      from: EMAIL_USER,
+    await resend.emails.send({
+      from: 'PriceTracker <onboarding@resend.dev>',
       to: product.alertEmail,
       subject: `✅ Now tracking ${product.name}`,
       html: `
@@ -303,32 +285,38 @@ async function sendWelcomeEmail(product) {
     console.log(`[WELCOME EMAIL] Successfully sent to ${product.alertEmail} ✅`);
   } catch (err) {
     console.error('[WELCOME EMAIL ERROR]', err.message);
-    console.error('[WELCOME EMAIL ERROR DETAILS]', err);
   }
 }
 async function sendAlert(product, oldPrice, newPrice) {
   const recipient = product.alertEmail;
-  if (!EMAIL_USER || !EMAIL_PASS || !recipient) {
-    console.log(`[ALERT] ${product.name}: ₹${oldPrice} → ₹${newPrice} (email not configured)`);
+  console.log(`[ALERT EMAIL] Attempting to send to ${recipient}`);
+  if (!process.env.RESEND_API_KEY || !recipient) {
+    console.log(`[ALERT EMAIL] Skipping — RESEND_API_KEY not set or no recipient`);
     return;
   }
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user: EMAIL_USER, pass: EMAIL_PASS },
-  });
-  await transporter.sendMail({
-    from: EMAIL_USER,
-    to: recipient,
-    subject: `🔔 Price Drop! ${product.name} is now ₹${newPrice}`,
-    html: `
-      <h2>Price Drop Alert 📉</h2>
-      <p><strong>${product.name}</strong> on <strong>${product.store}</strong></p>
-      <p>Price dropped from <s>₹${oldPrice}</s> → <strong>₹${newPrice}</strong></p>
-      ${product.threshold ? `<p>Your threshold: ₹${product.threshold}</p>` : ""}
-      ${product.url ? `<p><a href="${product.url}">View on ${product.store}</a></p>` : ""}
-    `,
-  });
-  console.log(`[EMAIL SENT] Alert for ${product.name}`);
+  try {
+    await resend.emails.send({
+      from: 'PriceTracker <onboarding@resend.dev>',
+      to: recipient,
+      subject: `🔔 Price Drop! ${product.name} is now ₹${newPrice}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f9f9f9; border-radius: 12px;">
+          <h2 style="color: #c0392b;">📉 Price Drop Alert!</h2>
+          <p><strong>${product.name}</strong> on <strong>${product.store}</strong></p>
+          <table style="width:100%; background:#fff; border-radius:8px; padding:16px; margin:16px 0;">
+            <tr><td style="color:#888;">Old Price</td><td><s>₹${oldPrice}</s></td></tr>
+            <tr><td style="color:#888;">New Price</td><td><strong style="color:#27ae60;">₹${newPrice}</strong></td></tr>
+            ${product.threshold ? `<tr><td style="color:#888;">Your Threshold</td><td>₹${product.threshold}</td></tr>` : ''}
+          </table>
+          ${product.url ? `<a href="${product.url}" style="display:inline-block; margin-top:12px; padding:10px 20px; background:#27ae60; color:#fff; border-radius:6px; text-decoration:none;">Buy Now →</a>` : ''}
+          <p style="margin-top:24px; font-size:12px; color:#aaa;">PriceTracker — watching prices so you don't have to.</p>
+        </div>
+      `
+    });
+    console.log(`[ALERT EMAIL] Successfully sent to ${recipient} ✅`);
+  } catch (err) {
+    console.error('[ALERT EMAIL ERROR]', err.message);
+  }
 }
 
 // --------------- Price check logic ---------------

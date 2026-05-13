@@ -10,6 +10,7 @@ frontend/.env
 
 # Runtime database (auto-created by server on first run)
 server/db.json
+server/.env
 
 # Build output
 frontend/dist/

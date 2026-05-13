@@ -236,65 +236,78 @@ function AddForm({ onAdd }) {
 
   return (
     <div className="add-form">
-      <div className="form-title">+ track new product</div>
+      <div className="form-header">
+        <div className="form-title">+ track new product</div>
+        <div className="form-subtitle">paste a product link — we'll auto-fetch the name &amp; price, then alert you when it drops.</div>
+      </div>
+
+      {/* Supported stores hint */}
+      <div className="supported-stores">
+        <span className="hint-label">works with</span>
+        <div className="store-chips">
+          {Object.keys(STORE_COLORS).map(store => <StoreTag key={store} store={store} />)}
+        </div>
+        <span className="hint-label">· short links like amzn.in, amzn.to, a.co also work</span>
+      </div>
 
       {/* Step 1: URL input */}
-      <div className="form-grid">
-        <div className="field full">
-          <label>paste product link</label>
-          <div className="url-row">
-            <input
-              value={url}
-              onChange={e => { setUrl(e.target.value); setForm(null); setFetchError('') }}
-              onKeyDown={e => e.key === 'Enter' && url && (e.preventDefault(), fetchProduct())}
-              placeholder="https://www.amazon.in/... or any supported store"
-            />
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={fetchProduct}
-              disabled={!url || fetching}
-              style={{ whiteSpace: 'nowrap' }}
-            >
-              {fetching ? 'fetching...' : detectedStore ? `fetch from ${detectedStore}` : 'fetch info →'}
-            </button>
-          </div>
-          {fetchError && <div className="form-error" style={{ marginTop: 6 }}>{fetchError}</div>}
+      <div className="form-step">
+        <div className="step-label"><span className="step-num">1</span> paste product link</div>
+        <div className="url-row">
+          <input
+            value={url}
+            onChange={e => { setUrl(e.target.value); setForm(null); setFetchError('') }}
+            onKeyDown={e => e.key === 'Enter' && url && (e.preventDefault(), fetchProduct())}
+            placeholder="https://www.amazon.in/dp/... or https://amzn.in/d/..."
+          />
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={fetchProduct}
+            disabled={!url || fetching}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {fetching ? 'fetching...' : detectedStore ? `fetch from ${detectedStore}` : 'fetch info →'}
+          </button>
         </div>
+        {fetchError && <div className="form-error" style={{ marginTop: 6 }}>{fetchError}</div>}
       </div>
 
       {/* Step 2: Fetched details + submit */}
       {form && (
-        <form onSubmit={submit}>
-          <div className="form-grid" style={{ marginTop: 16 }}>
-            <div className="field full">
-              <label>product name *</label>
-              <input value={form.name} onChange={e => setField('name', e.target.value)} placeholder="product name" />
+        <div className="form-step">
+          <div className="step-label"><span className="step-num">2</span> confirm details &amp; start tracking</div>
+          <form onSubmit={submit}>
+            <div className="form-grid">
+              <div className="field full">
+                <label>product name *</label>
+                <input value={form.name} onChange={e => setField('name', e.target.value)} placeholder="product name" />
+              </div>
+              <div className="field">
+                <label>store</label>
+                <input value={form.store} readOnly style={{ opacity: 0.6 }} />
+              </div>
+              <div className="field">
+                <label>current price (₹)</label>
+                <input type="number" value={form.currentPrice} onChange={e => setField('currentPrice', e.target.value)} placeholder="auto-fetched" />
+              </div>
+              <div className="field">
+                <label>expected price (₹) *</label>
+                <input type="number" value={form.threshold} onChange={e => setField('threshold', e.target.value)} placeholder="alert me when price drops to..." required />
+              </div>
+              <div className="field">
+                <label>notify email *</label>
+                <input type="email" value={form.alertEmail} onChange={e => setField('alertEmail', e.target.value)} placeholder="you@example.com" required />
+              </div>
+              <div className="field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <button type="submit" className="btn-primary" disabled={loading}>
+                  {loading ? 'adding...' : 'track product →'}
+                </button>
+              </div>
             </div>
-            <div className="field">
-              <label>store</label>
-              <input value={form.store} readOnly style={{ opacity: 0.6 }} />
-            </div>
-            <div className="field">
-              <label>current price (₹)</label>
-              <input type="number" value={form.currentPrice} onChange={e => setField('currentPrice', e.target.value)} placeholder="auto-fetched" />
-            </div>
-            <div className="field">
-              <label>expected price (₹) *</label>
-              <input type="number" value={form.threshold} onChange={e => setField('threshold', e.target.value)} placeholder="alert me when price drops to..." required />
-            </div>
-            <div className="field">
-              <label>notify email *</label>
-              <input type="email" value={form.alertEmail} onChange={e => setField('alertEmail', e.target.value)} placeholder="you@example.com" required />
-            </div>
-            <div className="field" style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button type="submit" className="btn-primary" disabled={loading}>
-                {loading ? 'adding...' : 'track product →'}
-              </button>
-            </div>
-          </div>
-          {error && <div className="form-error">{error}</div>}
-        </form>
+            {error && <div className="form-error">{error}</div>}
+          </form>
+        </div>
       )}
     </div>
   )

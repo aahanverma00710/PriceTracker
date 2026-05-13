@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+server/node_modules/
+
+# Environment variables (never commit real credentials)
+.env
+server/.env
+frontend/.env
+
+# Runtime database (auto-created by server on first run)
+server/db.json
+
+# Build output
+frontend/dist/
+frontend/build/
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*

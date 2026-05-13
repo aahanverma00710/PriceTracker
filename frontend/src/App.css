@@ -348,7 +348,18 @@
 
 /* ---- URL row ---- */
 .url-row { display: flex; gap: 8px; }
-.url-row input { flex: 1; min-width: 0; }
+.url-row input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: var(--r);
+  transition: border-color 0.12s;
+}
+.url-row input:focus { outline: none; border-color: var(--accent); }
+.url-row input::placeholder { color: var(--text3); }
 
 /* ---- Mobile ---- */
 @media (max-width: 640px) {

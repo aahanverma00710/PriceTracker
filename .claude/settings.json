@@ -17,7 +17,9 @@
       "Bash(git stash *)",
       "Bash(git commit *)",
       "Bash(git -C \"/Users/aahanverma/Desktop/Aahan Work Space/Price tracker/price-tracker-deploy\" diff)",
-      "Bash(git -C \"/Users/aahanverma/Desktop/Aahan Work Space/Price tracker/price-tracker-deploy\" add server/index.js .env.example .claude/settings.json)"
+      "Bash(git -C \"/Users/aahanverma/Desktop/Aahan Work Space/Price tracker/price-tracker-deploy\" add server/index.js .env.example .claude/settings.json)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -m json.tool)"
     ]
   }
 }

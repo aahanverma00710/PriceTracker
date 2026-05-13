@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
@@ -260,33 +260,52 @@ const EMAIL_USER = process.env.EMAIL_USER || "";
 const EMAIL_PASS = process.env.EMAIL_PASS || "";
 
 async function sendWelcomeEmail(product) {
-  if (!EMAIL_USER || !EMAIL_PASS) return;
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: EMAIL_USER, pass: EMAIL_PASS }
-  });
-  await transporter.sendMail({
-    from: EMAIL_USER,
-    to: product.alertEmail,
-    subject: `✅ Now tracking ${product.name}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f9f9f9; border-radius: 12px;">
-        <h2 style="color: #111;">📦 We're on it!</h2>
-        <p>You've added <strong>${product.name}</strong> from <strong>${product.store}</strong> to your price tracker.</p>
-        <table style="width:100%; background:#fff; border-radius:8px; padding:16px; margin:16px 0;">
-          <tr><td style="color:#888;">Current Price</td><td><strong>₹${product.currentPrice}</strong></td></tr>
-          <tr><td style="color:#888;">Alert Threshold</td><td><strong>${product.threshold ? '₹' + product.threshold : 'Not set'}</strong></td></tr>
-          <tr><td style="color:#888;">Store</td><td><strong>${product.store}</strong></td></tr>
-        </table>
-        <p style="color:#555;">We'll check prices every 3 hours and notify you the moment the price drops below <strong>${product.threshold ? '₹' + product.threshold : 'your threshold'}</strong>.</p>
-        ${product.url ? `<a href="${product.url}" style="display:inline-block; margin-top:12px; padding:10px 20px; background:#111; color:#fff; border-radius:6px; text-decoration:none;">View Product →</a>` : ''}
-        <p style="margin-top:24px; font-size:12px; color:#aaa;">PriceTracker — watching prices so you don't have to.</p>
-      </div>
-    `
-  });
-  console.log(`[WELCOME EMAIL] Sent to ${product.alertEmail}`);
+  console.log(`[WELCOME EMAIL] Attempting to send to ${product.alertEmail}`);
+  if (!EMAIL_USER || !EMAIL_PASS) {
+    console.log('[WELCOME EMAIL] Skipping — EMAIL_USER or EMAIL_PASS not set');
+    return;
+  }
+  try {
+    console.log(`[WELCOME EMAIL] Connecting to smtp.gmail.com as ${EMAIL_USER}`);
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: EMAIL_USER,
+        pass: EMAIL_PASS
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+    await transporter.verify();
+    console.log('[WELCOME EMAIL] SMTP connection verified ✅');
+    await transporter.sendMail({
+      from: EMAIL_USER,
+      to: product.alertEmail,
+      subject: `✅ Now tracking ${product.name}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f9f9f9; border-radius: 12px;">
+          <h2 style="color: #111;">📦 We're on it!</h2>
+          <p>You've added <strong>${product.name}</strong> from <strong>${product.store}</strong> to your price tracker.</p>
+          <table style="width:100%; background:#fff; border-radius:8px; padding:16px; margin:16px 0;">
+            <tr><td style="color:#888;">Current Price</td><td><strong>₹${product.currentPrice}</strong></td></tr>
+            <tr><td style="color:#888;">Alert Threshold</td><td><strong>${product.threshold ? '₹' + product.threshold : 'Not set'}</strong></td></tr>
+            <tr><td style="color:#888;">Store</td><td><strong>${product.store}</strong></td></tr>
+          </table>
+          <p style="color:#555;">We'll check prices every 3 hours and notify you the moment the price drops below <strong>${product.threshold ? '₹' + product.threshold : 'your threshold'}</strong>.</p>
+          ${product.url ? `<a href="${product.url}" style="display:inline-block; margin-top:12px; padding:10px 20px; background:#111; color:#fff; border-radius:6px; text-decoration:none;">View Product →</a>` : ''}
+          <p style="margin-top:24px; font-size:12px; color:#aaa;">PriceTracker — watching prices so you don't have to.</p>
+        </div>
+      `
+    });
+    console.log(`[WELCOME EMAIL] Successfully sent to ${product.alertEmail} ✅`);
+  } catch (err) {
+    console.error('[WELCOME EMAIL ERROR]', err.message);
+    console.error('[WELCOME EMAIL ERROR DETAILS]', err);
+  }
 }
-
 async function sendAlert(product, oldPrice, newPrice) {
   const recipient = product.alertEmail;
   if (!EMAIL_USER || !EMAIL_PASS || !recipient) {

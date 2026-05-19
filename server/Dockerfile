@@ -1,6 +1,5 @@
 FROM node:20-slim
 
-# Install Chrome and required system libraries
 RUN apt-get update && apt-get install -y \
   chromium \
   libglib2.0-0 \
@@ -24,10 +23,11 @@ RUN apt-get update && apt-get install -y \
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROME_BIN=/usr/bin/chromium
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm install --ignore-scripts
 COPY . .
 
 EXPOSE 3001

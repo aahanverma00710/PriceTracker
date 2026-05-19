@@ -80,7 +80,10 @@ function ProductCard({ product, onDelete, onRefresh }) {
   }
 
   return (
-    <div className={`product-card ${belowThreshold ? 'alerted' : ''}`}>
+    <div
+      className={`product-card ${belowThreshold ? 'alerted' : ''}`}
+      style={{ '--store-color': STORE_COLORS[product.store] || 'var(--border2)' }}
+    >
       <div className="card-header" onClick={() => setExpanded(!expanded)}>
         <div className="card-left">
           <div className="product-name">{product.name}</div>
@@ -104,7 +107,7 @@ function ProductCard({ product, onDelete, onRefresh }) {
             )}
           </div>
           {belowThreshold && <span className="alert-pill">🔔 alert!</span>}
-          <span className="expand-icon">{expanded ? '▲' : '▼'}</span>
+          <span className="expand-icon" style={{ transform: expanded ? 'rotate(180deg)' : 'none' }}>▼</span>
         </div>
       </div>
 
@@ -180,7 +183,154 @@ function detectStore(url) {
   return null
 }
 
-function AddForm({ onAdd }) {
+function LoginScreen({ onLogin }) {
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [confirmNew, setConfirmNew] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!email || !email.includes('@')) { setError('Please enter a valid email'); return; }
+    setLoading(true); setError('');
+    try {
+      const res = await fetch(`${API}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase().trim() })
+      });
+      const data = await res.json();
+      if (data.isNew) {
+        setPendingEmail(email.toLowerCase().trim());
+        setConfirmNew(true);
+      } else {
+        localStorage.setItem('pt_user', JSON.stringify(data.user));
+        onLogin(data.user);
+      }
+    } catch {
+      setError('Something went wrong. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleConfirm() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingEmail })
+      });
+      const data = await res.json();
+      if (data.user) {
+        localStorage.setItem('pt_user', JSON.stringify(data.user));
+        onLogin(data.user);
+      }
+    } catch {
+      setError('Something went wrong. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (confirmNew) return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0d0d0d 0%, #1a1a2e 50%, #0d0d0d 100%)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-mono)'
+    }}>
+      <div style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 16, padding: '48px 40px', width: '100%', maxWidth: 420,
+        backdropFilter: 'blur(20px)', boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
+        textAlign: 'center'
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🤔</div>
+        <h2 style={{ fontFamily: 'var(--font-head)', color: '#f0ede8', marginBottom: 8 }}>New here?</h2>
+        <p style={{ color: '#888', fontSize: 14, marginBottom: 8 }}>You're signing up as:</p>
+        <p style={{ color: '#c8f135', fontSize: 16, fontWeight: 600, marginBottom: 16 }}>{pendingEmail}</p>
+        <p style={{ color: '#888', fontSize: 13, marginBottom: 32 }}>
+          This email will be used to manage your tracked products and receive price alerts.
+          Are you sure you want to continue?
+        </p>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button onClick={() => setConfirmNew(false)} style={{
+            flex: 1, padding: '12px', background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8,
+            color: '#888', cursor: 'pointer', fontFamily: 'var(--font-mono)'
+          }}>Go back</button>
+          <button onClick={handleConfirm} disabled={loading} style={{
+            flex: 1, padding: '12px', background: '#c8f135',
+            border: 'none', borderRadius: 8, color: '#000',
+            fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-mono)'
+          }}>{loading ? 'Creating...' : 'Yes, continue →'}</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0d0d0d 0%, #1a1a2e 50%, #0d0d0d 100%)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-mono)'
+    }}>
+      <div style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 16, padding: '48px 40px', width: '100%', maxWidth: 420,
+        backdropFilter: 'blur(20px)', boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📉</div>
+          <h1 style={{ fontFamily: 'var(--font-head)', fontSize: 28, fontWeight: 700, color: '#c8f135', margin: 0 }}>pricewatch</h1>
+          <p style={{ color: '#888', fontSize: 14, marginTop: 8 }}>Track prices. Get notified. Save money.</p>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#888', marginBottom: 8 }}>
+              Your email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoFocus
+              style={{
+                width: '100%', padding: '12px 16px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8, color: '#f0ede8', fontSize: 14,
+                fontFamily: 'var(--font-mono)', outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+          {error && <div style={{ color: '#ff4757', fontSize: 12, marginBottom: 12 }}>{error}</div>}
+          <button type="submit" disabled={loading} style={{
+            width: '100%', padding: '12px', background: '#c8f135',
+            color: '#000', border: 'none', borderRadius: 8, fontSize: 14,
+            fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.7 : 1, fontFamily: 'var(--font-mono)'
+          }}>
+            {loading ? 'Checking...' : 'Get Started →'}
+          </button>
+        </form>
+        <p style={{ textAlign: 'center', fontSize: 11, color: '#555', marginTop: 24 }}>
+          No password needed. Just your email.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AddForm({ onAdd, user }) {
   const [url, setUrl] = useState('')
   const [fetching, setFetching] = useState(false)
   const [fetchError, setFetchError] = useState('')
@@ -202,7 +352,7 @@ function AddForm({ onAdd }) {
       })
       const data = await res.json()
       if (!res.ok) { setFetchError(data.error || 'Failed to fetch product info'); return }
-      setForm({ name: data.name || '', store, url, currentPrice: data.price || '', threshold: '', alertEmail: '' })
+      setForm({ name: data.name || '', store, url, currentPrice: data.price || '', threshold: '' })
     } catch {
       setFetchError('Server not reachable. Is the backend running?')
     } finally {
@@ -214,13 +364,12 @@ function AddForm({ onAdd }) {
     e.preventDefault()
     if (!form.name || !form.store) { setError('Name and store are required.'); return }
     if (!form.threshold) { setError('Expected price is required — we need it to know when to alert you.'); return }
-    if (!form.alertEmail) { setError('Email is required — we need it to send you alerts.'); return }
     setLoading(true); setError('')
     try {
       const res = await fetch(`${API}/products`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify({ ...form, userEmail: user?.email, alertEmail: user?.email })
       })
       if (!res.ok) { const d = await res.json(); setError(d.error || 'Failed'); return }
       setUrl(''); setForm(null)
@@ -237,7 +386,7 @@ function AddForm({ onAdd }) {
   return (
     <div className="add-form">
       <div className="form-header">
-        <div className="form-title">+ track new product</div>
+        <div className="form-title">Track a new product</div>
         <div className="form-subtitle">paste a product link — we'll auto-fetch the name &amp; price, then alert you when it drops.</div>
       </div>
 
@@ -291,15 +440,11 @@ function AddForm({ onAdd }) {
                 <label>current price (₹)</label>
                 <input type="number" value={form.currentPrice} onChange={e => setField('currentPrice', e.target.value)} placeholder="auto-fetched" />
               </div>
-              <div className="field">
+              <div className="field full">
                 <label>expected price (₹) *</label>
                 <input type="number" value={form.threshold} onChange={e => setField('threshold', e.target.value)} placeholder="alert me when price drops to..." required />
               </div>
-              <div className="field">
-                <label>notify email *</label>
-                <input type="email" value={form.alertEmail} onChange={e => setField('alertEmail', e.target.value)} placeholder="you@example.com" required />
-              </div>
-              <div className="field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <div className="field full" style={{ display: 'flex', alignItems: 'flex-end' }}>
                 <button type="submit" className="btn-primary" disabled={loading}>
                   {loading ? 'adding...' : 'track product →'}
                 </button>
@@ -319,7 +464,7 @@ function AlertsPanel({ alerts }) {
     <div className="alerts-list">
       {alerts.slice(0, 10).map((a, i) => (
         <div key={i} className="alert-row">
-          <span className="alert-dot">●</span>
+          <span className="alert-dot" />
           <div>
             <span className="text-bright">{a.productName}</span>
             <span className="text-muted"> on {a.store} — </span>
@@ -339,17 +484,26 @@ export default function App() {
   const [tab, setTab] = useState('products')
   const [checking, setChecking] = useState(false)
   const [lastChecked, setLastChecked] = useState(null)
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('pt_user')
+    return saved ? JSON.parse(saved) : null
+  })
+
+  function handleLogout() {
+    localStorage.removeItem('pt_user')
+    setUser(null)
+  }
 
   const load = useCallback(async () => {
     try {
       const [pr, al] = await Promise.all([
-        fetch(`${API}/products`).then(r => r.json()),
+        fetch(`${API}/products?email=${user?.email}`).then(r => r.json()),
         fetch(`${API}/alerts`).then(r => r.json())
       ])
       setProducts(Array.isArray(pr) ? pr : [])
       setAlerts(Array.isArray(al) ? al : [])
     } catch { /* server not running yet */ }
-  }, [])
+  }, [user])
 
   useEffect(() => { load() }, [load])
 
@@ -371,6 +525,8 @@ export default function App() {
 
   const totalDrop = products.filter(p => p.currentPrice < p.originalPrice).length
   const triggered = products.filter(p => p.threshold && p.currentPrice <= p.threshold).length
+
+  if (!user) return <LoginScreen onLogin={setUser} />
 
   return (
     <div className="layout">
@@ -403,21 +559,26 @@ export default function App() {
             <div className="last-checked text-muted">last: {timeAgo(lastChecked.toISOString())}</div>
           )}
           <div className="cron-note text-muted">auto-checks every 6h</div>
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 8 }}>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</div>
+            <button onClick={handleLogout} className="btn-sm danger" style={{ width: '100%' }}>logout</button>
+          </div>
         </div>
       </aside>
 
       <main className="main">
         {tab === 'add' && (
-          <AddForm onAdd={() => { load(); setTab('products') }} />
+          <AddForm onAdd={() => { load(); setTab('products') }} user={user} />
         )}
 
         {tab === 'products' && (
           <div className="product-list">
             {products.length === 0 ? (
               <div className="empty-state">
-                <div style={{ fontSize: 32, marginBottom: 12 }}>📦</div>
-                <div>no products tracked yet</div>
-                <button className="btn-sm accent" style={{ marginTop: 12 }} onClick={() => setTab('add')}>
+                <div className="empty-icon">📦</div>
+                <div style={{ fontSize: 15, fontFamily: 'var(--font-head)', fontWeight: 600, color: 'var(--text2)' }}>nothing tracked yet</div>
+                <div style={{ fontSize: 12, color: 'var(--text3)' }}>paste a product URL to get started</div>
+                <button className="btn-sm accent" style={{ marginTop: 8 }} onClick={() => setTab('add')}>
                   + add your first product
                 </button>
               </div>

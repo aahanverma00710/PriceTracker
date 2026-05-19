@@ -47,13 +47,33 @@ const DB_PATH = path.join(__dirname, "db.json");
 
 // --------------- Simple JSON "database" ---------------
 function readDB() {
-  if (!fs.existsSync(DB_PATH)) return { products: [], alerts: [] };
-  return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+  if (!fs.existsSync(DB_PATH)) return { products: [], alerts: [], users: [] };
+  const data = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+  if (!data.users) data.users = [];
+  return data;
 }
 
 function writeDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
+
+function migrateUsers() {
+  const db = readDB();
+  let changed = false;
+  db.products.forEach(p => {
+    if (p.alertEmail) {
+      if (!p.userEmail) { p.userEmail = p.alertEmail; changed = true; }
+      if (!db.users.find(u => u.email === p.alertEmail)) {
+        db.users.push({ id: Date.now().toString() + Math.random(), email: p.alertEmail, createdAt: new Date().toISOString() });
+        changed = true;
+        console.log(`[MIGRATE] Created user for ${p.alertEmail}`);
+      }
+    }
+  });
+  if (changed) writeDB(db);
+  console.log(`[MIGRATE] Done. ${db.users.length} users.`);
+}
+migrateUsers();
 
 // --------------- Store scrapers ---------------
 // Try multiple text candidates and return the first valid positive price
@@ -375,15 +395,46 @@ async function checkAllProducts() {
 
 // --------------- Routes ---------------
 
+// Auth
+app.post("/api/auth/login", (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "Email is required" });
+  const db = readDB();
+  const existingUser = db.users.find(u => u.email === email.toLowerCase().trim());
+  if (existingUser) {
+    console.log(`[AUTH] Existing user logged in: ${email}`);
+    return res.json({ user: existingUser, isNew: false });
+  }
+  res.json({ isNew: true, email: email.toLowerCase().trim() });
+});
+
+app.post("/api/auth/register", (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "Email is required" });
+  const db = readDB();
+  if (db.users.find(u => u.email === email)) {
+    return res.status(400).json({ error: "User already exists" });
+  }
+  const user = { id: Date.now().toString(), email, createdAt: new Date().toISOString() };
+  db.users.push(user);
+  writeDB(db);
+  console.log(`[AUTH] New user registered: ${email}`);
+  res.json({ user, isNew: true });
+});
+
 // Get all products
 app.get("/api/products", (req, res) => {
+  const { email } = req.query;
   const db = readDB();
-  res.json(db.products);
+  const products = email
+    ? db.products.filter(p => p.userEmail === email || p.alertEmail === email)
+    : db.products;
+  res.json(products);
 });
 
 // Add product
 app.post("/api/products", async (req, res) => {
-  const { name, store, url, currentPrice, threshold, alertEmail } = req.body;
+  const { name, store, url, currentPrice, threshold, alertEmail, userEmail } = req.body;
   if (!name || !store) return res.status(400).json({ error: "Name and store are required." });
 
   const db = readDB();
@@ -396,6 +447,7 @@ app.post("/api/products", async (req, res) => {
     originalPrice: parseFloat(currentPrice) || 0,
     threshold: threshold ? parseFloat(threshold) : null,
     alertEmail: alertEmail || null,
+    userEmail: userEmail || alertEmail || null,
     history: [{ price: parseFloat(currentPrice) || 0, checkedAt: new Date().toISOString() }],
     addedAt: new Date().toISOString(),
   };

@@ -507,6 +507,23 @@ export default function App() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    if (!user) return
+    fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user.email })
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.isNew) {
+          localStorage.removeItem('pt_user')
+          setUser(null)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   async function checkNow() {
     setChecking(true)
     try {

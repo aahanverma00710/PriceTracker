@@ -225,6 +225,37 @@ const SCRAPERS = {
   },
 
   Myntra: async (url) => {
+    // Try the Myntra product API first — extracts product ID from URL, no browser needed
+    const idMatch = url.match(/\/(\d+)(?:\/buy)?(?:[?#].*)?$/);
+    if (idMatch) {
+      try {
+        const pid = idMatch[1];
+        const { data } = await axios.get(`https://www.myntra.com/gateway/v2/product/${pid}`, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+            "Accept": "application/json, */*;q=0.9",
+            "Referer": "https://www.myntra.com/",
+            "x-location-code": "560001",
+          },
+          timeout: 10000,
+        });
+        const style = data?.style;
+        if (style) {
+          const name = style.name || null;
+          const price =
+            style.sizes?.[0]?.sizeSellerData?.[0]?.discountedPrice ||
+            style.sizes?.[0]?.sizeSellerData?.[0]?.mrp ||
+            style.mrp ||
+            null;
+          console.log(`[MYNTRA API] ${name} — ₹${price}`);
+          if (name || price) return { name, price };
+        }
+      } catch (apiErr) {
+        console.log('[MYNTRA] API failed, falling back to Puppeteer:', apiErr.message);
+      }
+    }
+
+    // Puppeteer fallback
     if (!puppeteer) return { price: null, name: null, note: "Puppeteer not installed" };
     let browser;
     try {
@@ -237,8 +268,8 @@ const SCRAPERS = {
         Object.defineProperty(navigator, "webdriver", { get: () => false });
         window.chrome = { runtime: {} };
       });
-      await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-      await new Promise(r => setTimeout(r, 3000));
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await new Promise(r => setTimeout(r, 4000));
       const result = await page.evaluate(() => {
         const nameSelectors = [".pdp-name", "h1.pdp-title", ".pdp-title", "h1"];
         const nameEl = nameSelectors.map(s => document.querySelector(s)).find(e => e?.innerText?.trim());

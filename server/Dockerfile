@@ -27,7 +27,7 @@ ENV CHROME_BIN=/usr/bin/chromium
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --ignore-scripts
+RUN PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install
 COPY . .
 
 EXPOSE 3001

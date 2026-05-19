@@ -26,9 +26,9 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV CHROME_BIN=/usr/bin/chromium
 
 WORKDIR /app
-COPY package*.json ./
+COPY server/package*.json ./
 RUN PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install
-COPY . .
+COPY server/ .
 
 EXPOSE 3001
 CMD ["node", "index.js"]

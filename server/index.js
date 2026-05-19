@@ -517,6 +517,175 @@ app.get("/api/alerts", (req, res) => {
   res.json(db.alerts || []);
 });
 
+// Price comparison — search same product across all stores
+app.post("/api/compare", async (req, res) => {
+  let { query } = req.body;
+  if (!query) return res.status(400).json({ error: "Query is required" });
+
+  // If the user pasted a product URL, scrape name+price directly and use it as the source result
+  let sourceResult = null;
+  let excludeStore = null;
+  const isUrl = /^https?:\/\//i.test(query.trim());
+  if (isUrl) {
+    const originalUrl = query.trim();
+    console.log(`[COMPARE] URL detected — resolving from: ${originalUrl}`);
+    try {
+      const host = new URL(originalUrl).hostname.replace('www.', '');
+      let storeName = null;
+      if (host.includes('amazon')) storeName = 'Amazon';
+      else if (host.includes('flipkart')) storeName = 'Flipkart';
+      else if (host.includes('myntra')) storeName = 'Myntra';
+      else if (host.includes('nykaa')) storeName = 'Nykaa';
+      else if (host.includes('meesho')) storeName = 'Meesho';
+
+      if (storeName && SCRAPERS[storeName]) {
+        const result = await SCRAPERS[storeName](originalUrl).catch(() => null);
+        if (result?.name) {
+          // Build a tight search query: prefer model code (e.g. MK7548I) + brand, else first 5 words
+          const words = result.name.split(/\s+/);
+          const modelCode = result.name.match(/\b[A-Z]{1,3}[\d]{3,}[A-Z0-9]*\b/);
+          query = modelCode
+            ? `${words[0]} ${words[1] || ''} ${modelCode[0]}`.trim()
+            : words.slice(0, 5).join(' ');
+          console.log(`[COMPARE] Resolved to: "${query}"`);
+
+          sourceResult = {
+            store: storeName,
+            name: result.name,
+            price: result.price,
+            productUrl: originalUrl,
+            available: true,
+            isSource: true,
+          };
+          excludeStore = storeName;
+        }
+      }
+    } catch {
+      // fall through — use raw query
+    }
+  }
+
+  console.log(`[COMPARE] Searching for: ${query}`);
+
+  const ALL_SEARCH_URLS = {
+    Amazon: `https://www.amazon.in/s?k=${encodeURIComponent(query)}`,
+    Flipkart: `https://www.flipkart.com/search?q=${encodeURIComponent(query)}`,
+  };
+  // Only include Myntra when it's not the source (it's JS-rendered and won't return results via axios)
+  if (excludeStore !== 'Myntra') {
+    ALL_SEARCH_URLS.Myntra = `https://www.myntra.com/${encodeURIComponent(query)}`;
+  }
+  const SEARCH_URLS = Object.fromEntries(
+    Object.entries(ALL_SEARCH_URLS).filter(([store]) => store !== excludeStore)
+  );
+
+  // Score a candidate title against query words — higher = better match
+  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+  function matchScore(title) {
+    if (!title) return -1;
+    const t = title.toLowerCase();
+    return queryWords.filter(w => t.includes(w)).length;
+  }
+
+
+  async function searchStore(store, url) {
+    try {
+      const { data } = await axios.get(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+          "Accept-Language": "en-IN,en;q=0.9",
+        },
+        timeout: 10000,
+      });
+      const $ = cheerio.load(data);
+
+      let name = null, price = null, productUrl = null, image = null;
+
+      if (store === 'Amazon') {
+        const items = $('[data-component-type="s-search-result"]');
+        let best = null, bestScore = -1;
+        items.each((i, el) => {
+          if (i >= 10) return false;
+          const title = $(el).find('h2 span').first().text().trim();
+          const score = matchScore(title);
+          if (score > bestScore) { bestScore = score; best = $(el); }
+        });
+        const el = best || items.first();
+        name = el.find('h2 span').first().text().trim();
+        price = parsePrice(el.find('.a-price-whole').first().text());
+        const href = el.find('h2 a').attr('href');
+        productUrl = href ? `https://www.amazon.in${href}` : null;
+        image = el.find('img.s-image').attr('src');
+      }
+
+      if (store === 'Flipkart') {
+        // Flipkart product links always contain /p/ — find product cards structurally
+        const items = $('a[href*="/p/"]').map((_i, el) => $(el).closest('div[class]')).toArray();
+        let best = null, bestScore = -1;
+        items.slice(0, 10).forEach(el => {
+          const title = $(el).find('a[title]').attr('title')
+            || $(el).find('a[href*="/p/"]').attr('title')
+            || $(el).text().slice(0, 120).trim();
+          const score = matchScore(title);
+          if (score > bestScore) { bestScore = score; best = $(el); }
+        });
+        const el = best;
+        if (el) {
+          name = el.find('a[title]').attr('title')
+            || el.find('a[href*="/p/"]').attr('title')
+            || el.find('[class*="KzDlHZ"], ._4rR01T, .s1Q9rs').first().text().trim();
+          price = parsePrice(
+            el.find('[class*="Nx9bqj"], ._30jeq3, ._1_WHN1').first().text()
+          ) || regexPrice(el.html() || '');
+          const href = el.find('a[href*="/p/"]').attr('href');
+          productUrl = href ? `https://www.flipkart.com${href}` : null;
+          image = el.find('img').attr('src');
+        }
+      }
+
+      if (store === 'Myntra') {
+        // Myntra is JS-rendered; axios rarely gets product data
+        const items = $('[class*="product-base"]');
+        let best = null, bestScore = -1;
+        items.each((i, el) => {
+          if (i >= 10) return false;
+          const title = $(el).find('[class*="product-brand"], [class*="product-product"]').text().trim();
+          const score = matchScore(title);
+          if (score > bestScore) { bestScore = score; best = $(el); }
+        });
+        const el = best || items.first();
+        if (el) {
+          name = $(el).find('[class*="product-brand"], [class*="product-product"]').first().text().trim();
+          price = parsePrice($(el).find('[class*="product-discountedPrice"], [class*="selling"]').first().text());
+          const href = $(el).find('a').attr('href');
+          productUrl = href ? `https://www.myntra.com/${href}` : null;
+          image = $(el).find('img').attr('src');
+        }
+      }
+
+      if (!name && !price) return { store, available: false };
+      return { store, name, price, productUrl, image, available: true };
+    } catch (err) {
+      console.error(`[COMPARE ERROR] ${store}:`, err.message);
+      return { store, available: false, error: err.message };
+    }
+  }
+
+  const results = await Promise.allSettled(
+    Object.entries(SEARCH_URLS).map(([store, url]) => searchStore(store, url))
+  );
+
+  const comparison = results.map(r => r.status === 'fulfilled' ? r.value : { store: 'Unknown', available: false });
+  if (sourceResult) comparison.push(sourceResult);
+  const sorted = [...comparison].sort((a, b) => {
+    if (!a.price) return 1;
+    if (!b.price) return -1;
+    return a.price - b.price;
+  });
+
+  res.json({ query, results: sorted });
+});
+
 // --------------- Keep-alive ping (called by cron-job.org every 10min) ---------------
 app.get("/ping", (req, res) => {
   res.json({ status: "alive", time: new Date().toISOString() });

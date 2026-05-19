@@ -31,11 +31,25 @@ const CHROME_PATHS = [
 const systemChrome = CHROME_PATHS.find(p => { try { return fs.existsSync(p); } catch { return false; } });
 
 function launchBrowser() {
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH ||
+    systemChrome ||
+    '/usr/bin/chromium-browser' ||
+    '/usr/bin/chromium';
   const opts = {
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"],
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-blink-features=AutomationControlled",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--single-process",
+      "--no-zygote",
+    ],
   };
-  if (systemChrome) opts.executablePath = systemChrome;
+  if (executablePath && fs.existsSync(executablePath)) {
+    opts.executablePath = executablePath;
+  }
   return puppeteer.launch(opts);
 }
 
@@ -161,39 +175,44 @@ const SCRAPERS = {
   Nykaa: async (url) => {
     const { data } = await axios.get(url, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-IN,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
       },
-      timeout: 10000,
+      timeout: 15000,
     });
     const $ = cheerio.load(data);
-    const name = $("h1").first().text().trim();
+    const name = $("h1").first().text().trim() ||
+      $('[class*="product-title"]').first().text().trim() ||
+      $('[class*="ProductTitle"]').first().text().trim();
     const price = parsePrice(
-      $(".css-111z9ua").first().text(),
       $('[class*="selling-price"]').first().text(),
+      $('[class*="sellingPrice"]').first().text(),
+      $('[class*="SellingPrice"]').first().text(),
+      $('[class*="css-111z9ua"]').first().text(),
       $('[class*="price"]').first().text(),
+      $('span[class*="Price"]').first().text(),
     ) || regexPrice(data);
     return { price, name };
   },
 
   Myntra: async (url) => {
-    if (!puppeteer) return { price: null, name: null, note: "Install puppeteer: npm install puppeteer" };
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"],
-    });
+    if (!puppeteer) return { price: null, name: null, note: "Puppeteer not installed" };
+    let browser;
     try {
+      browser = await launchBrowser();
       const page = await browser.newPage();
       await page.setViewport({ width: 1366, height: 768 });
       await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
       await page.setExtraHTTPHeaders({ "Accept-Language": "en-IN,en;q=0.9", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" });
-      // override navigator.webdriver even when stealth isn't available
       await page.evaluateOnNewDocument(() => {
         Object.defineProperty(navigator, "webdriver", { get: () => false });
         window.chrome = { runtime: {} };
       });
       await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-      // give JS time to render product info
       await new Promise(r => setTimeout(r, 3000));
       const result = await page.evaluate(() => {
         const nameSelectors = [".pdp-name", "h1.pdp-title", ".pdp-title", "h1"];
@@ -206,15 +225,19 @@ const SCRAPERS = {
         return { name, price };
       });
       return result;
+    } catch (err) {
+      console.error('[MYNTRA] Browser launch failed:', err.message);
+      return { price: null, name: null, note: "Browser unavailable: " + err.message };
     } finally {
-      await browser.close();
+      if (browser) await browser.close();
     }
   },
 
   Meesho: async (url) => {
-    if (!puppeteer) return { price: null, name: null, note: "Install puppeteer: npm install puppeteer" };
-    const browser = await launchBrowser();
+    if (!puppeteer) return { price: null, name: null, note: "Puppeteer not installed" };
+    let browser;
     try {
+      browser = await launchBrowser();
       const page = await browser.newPage();
       await page.setViewport({ width: 1366, height: 768 });
       await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
@@ -236,8 +259,11 @@ const SCRAPERS = {
         return { name, price };
       });
       return result;
+    } catch (err) {
+      console.error('[MEESHO] Browser launch failed:', err.message);
+      return { price: null, name: null, note: "Browser unavailable: " + err.message };
     } finally {
-      await browser.close();
+      if (browser) await browser.close();
     }
   },
 
